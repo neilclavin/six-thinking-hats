@@ -1,2 +1,0 @@
-# one URL per line; these are just examples — swap in your own
-https://example.com

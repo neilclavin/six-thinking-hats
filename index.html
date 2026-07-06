@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Six Thinking Hats — AI council</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0f1115; --panel:#161922; --line:#262a33;
+          --field:#1a1d24; --border:#333844; --ink:#e8e8ea; --dim:#9aa0aa; --faint:#757b86;
+          --accent:#4f7cff; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system,
+         BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 18px 24px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 19px; }
+  header p { margin: 4px 0 0; color: var(--dim); font-size: 13px; }
+  .wrap { display: grid; grid-template-columns: 380px 1fr; min-height: calc(100vh - 70px); }
+  form { padding: 18px 22px; border-right: 1px solid var(--line); overflow-y: auto; }
+  label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+          color: var(--dim); margin: 16px 0 6px; }
+  input, textarea, select { width: 100%; padding: 9px 11px; background: var(--field);
+          border: 1px solid var(--border); border-radius: 8px; color: var(--ink);
+          font-size: 14px; font-family: inherit; }
+  textarea { resize: vertical; min-height: 60px; }
+  .row { display: flex; gap: 10px; } .row > div { flex: 1; }
+  .check { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; color: var(--dim); }
+  .check input { width: auto; }
+  button { margin-top: 18px; width: 100%; padding: 12px; border: 0; border-radius: 8px;
+           background: var(--accent); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  .hint { font-size: 12px; color: var(--faint); margin-top: 6px; line-height: 1.45; }
+  .hint a { color: #7aa2ff; }
+  #drop { margin-top: 6px; padding: 14px; border: 1.5px dashed var(--border); border-radius: 8px;
+          text-align: center; color: var(--faint); font-size: 13px; cursor: pointer; }
+  #drop.over { border-color: var(--accent); color: var(--ink); }
+  .att { display: flex; justify-content: space-between; align-items: center; gap: 8px;
+         background: var(--field); border: 1px solid var(--border); border-radius: 6px;
+         padding: 6px 10px; margin-top: 6px; font-size: 13px; }
+  .att button { width: auto; margin: 0; padding: 2px 8px; background: transparent; color: var(--faint);
+                font-size: 16px; line-height: 1; }
+  #out { padding: 20px 28px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+         font: 13.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .banner { font-weight: 700; }
+  .white{color:#e8e8ea} .red{color:#ff6b6b} .black{color:#b7bdc9}
+  .yellow{color:#ffd24a} .green{color:#4ade80} .blue{color:#6ea8ff}
+  .sys { color: var(--faint); font-style: italic; }
+  .err { color:#ff6b6b; font-weight:600; }
+  .idle { color: var(--faint); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎩 Six Thinking Hats — AI council</h1>
+  <p>Edward de Bono's method as six AI agents. Runs in your browser with your own Anthropic API key.</p>
+</header>
+<div class="wrap">
+  <form id="f">
+    <label for="key">Your Anthropic API key</label>
+    <input type="password" id="key" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
+    <div class="check"><input type="checkbox" id="remember"><label for="remember" style="margin:0;text-transform:none;letter-spacing:0;color:var(--dim);font-size:13px">Remember on this device</label></div>
+    <div class="hint">Stays in your browser, sent only to Anthropic. No key?
+      <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get one here</a> (needs a little billing credit).</div>
+
+    <label for="problem">Problem / decision</label>
+    <textarea id="problem" placeholder="e.g. Should we add a mid-tier plan and change our free tier?"></textarea>
+    <div class="hint">Optional if you add material below — the Blue Hat will frame the question from it.</div>
+
+    <div class="row">
+      <div>
+        <label for="mode">Approach</label>
+        <select id="mode">
+          <option value="exploration">Exploration (find ideas)</option>
+          <option value="evaluation">Evaluation (decide)</option>
+        </select>
+      </div>
+      <div>
+        <label for="model">Model</label>
+        <select id="model">
+          <option value="claude-sonnet-5">Sonnet 5 (cheaper)</option>
+          <option value="claude-opus-4-8">Opus 4.8 (deeper)</option>
+        </select>
+      </div>
+    </div>
+
+    <label for="length">Response length (per hat)</label>
+    <select id="length">
+      <option value="1200">Short — cheapest</option>
+      <option value="2500" selected>Medium</option>
+      <option value="4000">Long — most thorough</option>
+    </select>
+
+    <label for="refs">Reference material (optional — paste notes, an article, a transcript)</label>
+    <textarea id="refs" placeholder="Paste any text the hats should reason from…"></textarea>
+
+    <label>Attach files (optional)</label>
+    <div id="drop">Drop <b>.txt / .md</b> files or images here, or click to choose</div>
+    <input type="file" id="file" multiple accept=".txt,.md,.markdown,text/*,image/*" style="display:none">
+    <div id="atts"></div>
+
+    <button id="go" type="submit">Run the council</button>
+    <div class="hint" style="margin-top:10px">Each run is ~7 calls billed to your key. Sonnet + Short keeps it a few cents.</div>
+  </form>
+  <div id="out"><span class="idle">Fill in the form and press Run. The six hats will appear here, one at a time, ending with the Blue Hat's decision.</span></div>
+</div>
+
+<script>
+"use strict";
+const API_URL = "https://api.anthropic.com/v1/messages";
+const API_VERSION = "2023-06-01";
+
+// ---- Hat definitions (ported verbatim from the Python council) -------------
+const HATS = {
+  white: { name: "White Hat — Information", emoji: "⚪", system:
+    "You are wearing the White Hat in a Six Thinking Hats session. Your ONLY mode is objective information. State the facts and figures that are known, and — just as important — name the information that is missing, uncertain, or would need to be gathered. Distinguish hard facts from beliefs. Do NOT give opinions, judge the idea, propose solutions, or express feelings. Neutral, factual, concise." },
+  red: { name: "Red Hat — Emotions", emoji: "🔴", system:
+    "You are wearing the Red Hat in a Six Thinking Hats session. Your ONLY mode is feelings, hunches, and gut reactions. Speak the emotional truth about the idea and the discussion so far — enthusiasm, unease, excitement, suspicion, hope, dread. You do NOT have to justify or explain any of it; that is the point of the Red Hat. Keep it short and honest. No data, no analysis, no logic." },
+  black: { name: "Black Hat — Caution", emoji: "⚫", system:
+    "You are wearing the Black Hat in a Six Thinking Hats session. Your ONLY mode is critical judgement and caution. Identify risks, flaws, obstacles, and concrete reasons this could fail. Be logical and specific — point to why, not just that. This is not pessimism for its own sake; it is careful risk assessment. Do NOT offer benefits, solutions, or feelings." },
+  yellow: { name: "Yellow Hat — Benefits", emoji: "🟡", system:
+    "You are wearing the Yellow Hat in a Six Thinking Hats session. Your ONLY mode is optimism grounded in logic. Identify the benefits, value, opportunities, and best-case outcomes — and give the logical reason each one is plausible. Be constructive but not naive; a Yellow Hat point should survive scrutiny. Do NOT list risks or downsides." },
+  green: { name: "Green Hat — Creativity", emoji: "🟢", system:
+    "You are wearing the Green Hat in a Six Thinking Hats session. Your ONLY mode is creativity and new ideas. Generate alternatives, provocations, and fresh possibilities — including ones that reframe the problem or turn a Black Hat risk into a design opportunity. Quantity and novelty over polish. Do NOT judge or evaluate the ideas you produce; just put them on the table." },
+};
+const BLUE_OPEN =
+  "You are wearing the Blue Hat in a Six Thinking Hats session — you manage the thinking process. Open the session: restate the problem crisply, name the goal and what a good outcome looks like, surface any assumptions or scope boundaries worth fixing up front, and state the hat sequence the team will follow. Be brief and directive. Do NOT solve the problem yourself or wear any of the other hats — you are setting the agenda.";
+const BLUE_DEBRIEF =
+  "You are wearing the Blue Hat in a Six Thinking Hats session — you manage the thinking process. The team has now cycled through the other hats (their contributions are in the transcript above). Debrief: synthesize what was learned across all hats, state a clear recommendation or decision, note the key risks to manage and information still needed, and list concrete, assignable next steps. Do NOT simply re-list each hat — integrate them into a judgement the team can act on.";
+const IMAGE_DIGEST_SYSTEM =
+  "You are a neutral research assistant. Describe this image faithfully for a decision-making session: its content, structure, and any text it contains. Do not add opinions or recommendations.";
+const SEQUENCES = {
+  exploration: ["white", "green", "yellow", "black", "red"],
+  evaluation:  ["white", "black", "yellow", "green", "red"],
+};
+
+// ---- Attachments -----------------------------------------------------------
+let attachments = []; // {name, kind:'text'|'image', text?, mediaType?, data?}
+
+function renderAtts() {
+  const box = document.getElementById("atts");
+  box.innerHTML = "";
+  attachments.forEach((a, i) => {
+    const row = document.createElement("div");
+    row.className = "att";
+    const label = document.createElement("span");
+    label.textContent = (a.kind === "image" ? "🖼 " : "📄 ") + a.name;
+    const rm = document.createElement("button");
+    rm.type = "button"; rm.textContent = "×"; rm.title = "Remove";
+    rm.onclick = () => { attachments.splice(i, 1); renderAtts(); };
+    row.append(label, rm); box.appendChild(row);
+  });
+}
+
+function addFiles(files) {
+  for (const file of files) {
+    const isImage = file.type.startsWith("image/");
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (isImage) {
+        const data = String(reader.result).split(",")[1]; // strip data: prefix
+        attachments.push({ name: file.name, kind: "image", mediaType: file.type, data });
+      } else {
+        attachments.push({ name: file.name, kind: "text", text: String(reader.result) });
+      }
+      renderAtts();
+    };
+    if (isImage) reader.readAsDataURL(file); else reader.readAsText(file);
+  }
+}
+
+// ---- Anthropic call (streaming) --------------------------------------------
+async function callClaude({ key, model, system, content, maxTokens, onText }) {
+  const messages = [{ role: "user", content }];
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {
+      "x-api-key": key,
+      "anthropic-version": API_VERSION,
+      "anthropic-dangerous-direct-browser-access": "true",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ model, max_tokens: maxTokens, system, messages, stream: true }),
+  });
+
+  if (!resp.ok) {
+    let msg = "HTTP " + resp.status;
+    try { const j = await resp.json(); msg = (j.error && j.error.message) || msg; } catch (e) {}
+    if (resp.status === 401) msg = "Your API key was rejected. Check the key and that your account has billing credit.";
+    if (resp.status === 429) msg = "Rate limit / low credit (429). Wait a moment or add credit, then retry.";
+    throw new Error(msg);
+  }
+
+  // Parse the SSE stream: lines like "data: {json}"; collect text_delta pieces.
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "", full = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (payload === "[DONE]") continue;
+      let evt; try { evt = JSON.parse(payload); } catch (e) { continue; }
+      if (evt.type === "content_block_delta" && evt.delta && evt.delta.type === "text_delta") {
+        full += evt.delta.text;
+        if (onText) onText(evt.delta.text);
+      } else if (evt.type === "error") {
+        throw new Error((evt.error && evt.error.message) || "Streaming error");
+      }
+    }
+  }
+  return full;
+}
+
+// ---- Output helpers --------------------------------------------------------
+const out = () => document.getElementById("out");
+function emit(text, className) {
+  const s = document.createElement("span");
+  if (className) s.className = className;
+  s.textContent = text;
+  out().appendChild(s);
+  out().scrollTop = out().scrollHeight;
+}
+function banner(emoji, title, hatKey) {
+  const line = "─".repeat(64);
+  emit(`\n${line}\n${emoji}  ${title}\n${line}\n`, "banner " + (hatKey || ""));
+}
+
+// ---- Build the source-material block --------------------------------------
+async function buildCorpus({ key, model, refs }) {
+  const parts = [];
+  if (refs.trim()) parts.push("=== [pasted text] ===\n" + refs.trim());
+  for (const a of attachments) {
+    if (a.kind === "text") {
+      parts.push(`=== [file] ${a.name} ===\n` + a.text.trim());
+    } else {
+      emit(`  reading image: ${a.name}…\n`, "sys");
+      const desc = await callClaude({
+        key, model, system: IMAGE_DIGEST_SYSTEM, maxTokens: 1000,
+        content: [
+          { type: "image", source: { type: "base64", media_type: a.mediaType, data: a.data } },
+          { type: "text", text: `Describe this source (${a.name}) faithfully.` },
+        ],
+      });
+      parts.push(`=== [image] ${a.name} ===\n` + desc.trim());
+    }
+  }
+  return parts.join("\n\n");
+}
+
+// ---- Prompt assembly (mirrors six_hats.py _prompt) -------------------------
+function buildPrompt(problem, transcript, mode, corpus, { opening, debrief } = {}) {
+  const parts = [];
+  parts.push(problem
+    ? `PROBLEM / DECISION:\n${problem}\n`
+    : "PROBLEM / DECISION:\n(None stated — derive the question to discuss from the source material below.)\n");
+  parts.push(`SESSION MODE: ${mode}`);
+  if (corpus) parts.push("\nSOURCE MATERIAL (evidence to reason from — cite it by its [type] title when you use a fact):\n" + corpus);
+  if (!opening && transcript.length)
+    parts.push("\nWHAT THE TEAM HAS SAID SO FAR (do not repeat it — build on it):\n" + transcript.join("\n\n"));
+  if (debrief) parts.push("\nNow deliver your Blue Hat debrief and decision.");
+  else if (!opening) parts.push("\nContribute your hat's perspective now.");
+  return parts.join("\n");
+}
+
+// ---- Run the whole council -------------------------------------------------
+async function run() {
+  const key = document.getElementById("key").value.trim();
+  const problem = document.getElementById("problem").value.trim();
+  const refs = document.getElementById("refs").value;
+  const mode = document.getElementById("mode").value;
+  const model = document.getElementById("model").value;
+  const maxTokens = parseInt(document.getElementById("length").value, 10);
+  const go = document.getElementById("go");
+
+  out().textContent = "";
+  if (!key) { emit("⚠ Please paste your Anthropic API key.\n", "err"); return; }
+  if (!problem && !refs.trim() && attachments.length === 0) {
+    emit("⚠ Enter a problem, or add some reference material.\n", "err"); return;
+  }
+
+  go.disabled = true; go.textContent = "Running…";
+  try {
+    let corpus = "";
+    if (refs.trim() || attachments.length) {
+      emit("[gathering source material…]\n", "sys");
+      corpus = await buildCorpus({ key, model, refs });
+    }
+    const order = SEQUENCES[mode];
+    const transcript = [];
+
+    banner("🔵", `Blue Hat — Opening  (${mode})`, "blue");
+    const opening = await callClaude({ key, model, maxTokens, system: BLUE_OPEN,
+      content: buildPrompt(problem, transcript, mode, corpus, { opening: true }),
+      onText: (t) => emit(t) });
+    transcript.push(`[Blue Hat — Opening]\n${opening}`);
+
+    for (const hatKey of order) {
+      const hat = HATS[hatKey];
+      banner(hat.emoji, hat.name, hatKey);
+      const ans = await callClaude({ key, model, maxTokens, system: hat.system,
+        content: buildPrompt(problem, transcript, mode, corpus),
+        onText: (t) => emit(t) });
+      transcript.push(`[${hat.name}]\n${ans}`);
+    }
+
+    banner("🔵", "Blue Hat — Debrief & Decision", "blue");
+    await callClaude({ key, model, maxTokens, system: BLUE_DEBRIEF,
+      content: buildPrompt(problem, transcript, mode, corpus, { debrief: true }),
+      onText: (t) => emit(t) });
+
+    emit("\n\n✔ Session complete.\n", "sys");
+  } catch (err) {
+    emit("\n⚠ " + err.message + "\n", "err");
+  } finally {
+    go.disabled = false; go.textContent = "Run the council";
+  }
+}
+
+// ---- Wiring ----------------------------------------------------------------
+window.addEventListener("DOMContentLoaded", () => {
+  const keyEl = document.getElementById("key");
+  const remember = document.getElementById("remember");
+  const saved = localStorage.getItem("sixhats_key");
+  if (saved) { keyEl.value = saved; remember.checked = true; }
+  const persist = () => {
+    if (remember.checked) localStorage.setItem("sixhats_key", keyEl.value);
+    else localStorage.removeItem("sixhats_key");
+  };
+  keyEl.addEventListener("input", persist);
+  remember.addEventListener("change", persist);
+
+  const drop = document.getElementById("drop");
+  const fileInput = document.getElementById("file");
+  drop.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", (e) => { addFiles(e.target.files); fileInput.value = ""; });
+  ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", (e) => { if (e.dataTransfer.files) addFiles(e.dataTransfer.files); });
+
+  document.getElementById("f").addEventListener("submit", (e) => { e.preventDefault(); run(); });
+});
+</script>
+</body>
+</html>

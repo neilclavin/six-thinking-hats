@@ -1,0 +1,7 @@
+anthropic>=0.40
+flask>=2.3            # the browser UI (app.py)
+
+# Optional — only needed to read these file types from a sources folder:
+pypdf>=4.0           # PDF files
+python-docx>=1.0     # .docx files
+# (Text/Markdown/CSV/HTML/JSON, images, and web URLs need no extra packages.)

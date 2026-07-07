@@ -17,13 +17,11 @@ talks straight to Claude using **your own** Anthropic API key.
 see below)_, paste your key, and go.
 
 Then:
-1. **Paste your Anthropic API key** (see below to get one). Tick "Remember on this device"
-   if you don't want to paste it each time.
-2. Type a **problem or decision** (and/or paste reference text / drop in `.txt`/`.md`
-   files and images).
-3. Pick **Exploration** (open up ideas) or **Evaluation** (pressure-test and decide),
-   choose a model, and hit **Run the council**.
-4. Watch the six hats stream in, ending with the Blue Hat's decision.
+1. **Paste your Anthropic API key** (see below to get one).
+2. Type a **problem or decision** (and/or upload `.txt`/`.md` files or images).
+3. Pick **Exploration** (open up ideas) or **Evaluation** (pressure-test and decide).
+4. Hit **Run the council** and watch the six hats stream in, ending with the Blue Hat's
+   decision. Responses are kept short and run on **Sonnet** to stay cheap.
 
 Sample material to try is in [`demo/`](demo/) — drag those `.md` files onto the drop zone.
 
@@ -36,12 +34,10 @@ This calls Claude, which is a paid API, so each person brings their own key:
 2. **Billing → add a little credit** ($5 lasts a long time).
 3. **API keys → Create Key**, copy it (`sk-ant-...`), and paste it into the page.
 
-Your key is used only for your runs and is **only ever sent to Anthropic** — it stays in
-your browser. "Remember on this device" saves it in your browser's local storage on your
-machine; leave it unticked on shared computers.
+Your key is used only for your runs and is **only ever sent to Anthropic** — it's never
+saved, so you'll paste it in each visit.
 
-**Cost:** one session is ~7 calls. Defaulting to **Sonnet** with **Short** length keeps a
-run to a few cents; Opus + Long costs more but goes deeper.
+**Cost:** one session is ~7 short calls on Sonnet — typically a few cents.
 
 ## Host it on GitHub Pages (to share a link)
 
@@ -59,10 +55,10 @@ Then on GitHub: **Settings → Pages → Build and deployment → Deploy from a 
 
 ## What it does and doesn't handle
 
-- ✅ Typed problems, pasted reference text, drag-dropped `.txt`/`.md` files, and images
-  (images are described by the vision model, then discussed).
+- ✅ A typed problem, and uploaded `.txt`/`.md` files or images (images are described by
+  the vision model, then discussed).
 - ❌ PDFs/Word docs and fetching web URLs — browsers can't do those cleanly without extra
-  machinery. Paste the text in instead.
+  machinery.
 
 ## Make it your own
 

@@ -23,9 +23,10 @@
           border: 1px solid var(--border); border-radius: 8px; color: var(--ink);
           font-size: 14px; font-family: inherit; }
   textarea { resize: vertical; min-height: 60px; }
-  .row { display: flex; gap: 10px; } .row > div { flex: 1; }
-  .check { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; color: var(--dim); }
-  .check input { width: auto; }
+  .radios { display: flex; gap: 16px; margin-top: 4px; }
+  .radios label { display: flex; align-items: center; gap: 6px; margin: 0; text-transform: none;
+                  letter-spacing: 0; font-size: 14px; color: var(--ink); cursor: pointer; }
+  .radios input { width: auto; }
   button { margin-top: 18px; width: 100%; padding: 12px; border: 0; border-radius: 8px;
            background: var(--accent); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
   button:disabled { opacity: .5; cursor: default; }
@@ -58,48 +59,26 @@
   <form id="f">
     <label for="key">Your Anthropic API key</label>
     <input type="password" id="key" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
-    <div class="check"><input type="checkbox" id="remember"><label for="remember" style="margin:0;text-transform:none;letter-spacing:0;color:var(--dim);font-size:13px">Remember on this device</label></div>
     <div class="hint">Stays in your browser, sent only to Anthropic. No key?
       <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get one here</a> (needs a little billing credit).</div>
 
     <label for="problem">Problem / decision</label>
-    <textarea id="problem" placeholder="e.g. Should we add a mid-tier plan and change our free tier?"></textarea>
-    <div class="hint">Optional if you add material below — the Blue Hat will frame the question from it.</div>
+    <input type="text" id="problem" placeholder="e.g. Should we add a mid-tier plan and change our free tier?">
+    <div class="hint">Optional if you upload documents below — the Blue Hat will frame the question from them.</div>
 
-    <div class="row">
-      <div>
-        <label for="mode">Approach</label>
-        <select id="mode">
-          <option value="exploration">Exploration (find ideas)</option>
-          <option value="evaluation">Evaluation (decide)</option>
-        </select>
-      </div>
-      <div>
-        <label for="model">Model</label>
-        <select id="model">
-          <option value="claude-sonnet-5">Sonnet 5 (cheaper)</option>
-          <option value="claude-opus-4-8">Opus 4.8 (deeper)</option>
-        </select>
-      </div>
+    <label>Approach</label>
+    <div class="radios">
+      <label><input type="radio" name="mode" value="exploration" checked> Exploration</label>
+      <label><input type="radio" name="mode" value="evaluation"> Evaluation</label>
     </div>
 
-    <label for="length">Response length (per hat)</label>
-    <select id="length">
-      <option value="1200">Short — cheapest</option>
-      <option value="2500" selected>Medium</option>
-      <option value="4000">Long — most thorough</option>
-    </select>
-
-    <label for="refs">Reference material (optional — paste notes, an article, a transcript)</label>
-    <textarea id="refs" placeholder="Paste any text the hats should reason from…"></textarea>
-
-    <label>Attach files (optional)</label>
+    <label>Upload documents</label>
     <div id="drop">Drop <b>.txt / .md</b> files or images here, or click to choose</div>
     <input type="file" id="file" multiple accept=".txt,.md,.markdown,text/*,image/*" style="display:none">
     <div id="atts"></div>
 
     <button id="go" type="submit">Run the council</button>
-    <div class="hint" style="margin-top:10px">Each run is ~7 calls billed to your key. Sonnet + Short keeps it a few cents.</div>
+    <div class="hint" style="margin-top:10px">Each run is ~7 short calls billed to your key on Sonnet — a few cents.</div>
   </form>
   <div id="out"><span class="idle">Fill in the form and press Run. The six hats will appear here, one at a time, ending with the Blue Hat's decision.</span></div>
 </div>
@@ -132,6 +111,11 @@ const SEQUENCES = {
   exploration: ["white", "green", "yellow", "black", "red"],
   evaluation:  ["white", "black", "yellow", "green", "red"],
 };
+
+// Fixed, simple defaults — no picker for these.
+const MODEL = "claude-sonnet-5";
+const MAX_TOKENS = 1200; // ~50% of the app's former default length
+const BREVITY = " Keep your response concise: about 100-150 words, short bullets are fine — no filler.";
 
 // ---- Attachments -----------------------------------------------------------
 let attachments = []; // {name, kind:'text'|'image', text?, mediaType?, data?}
@@ -232,16 +216,15 @@ function banner(emoji, title, hatKey) {
 }
 
 // ---- Build the source-material block --------------------------------------
-async function buildCorpus({ key, model, refs }) {
+async function buildCorpus({ key }) {
   const parts = [];
-  if (refs.trim()) parts.push("=== [pasted text] ===\n" + refs.trim());
   for (const a of attachments) {
     if (a.kind === "text") {
       parts.push(`=== [file] ${a.name} ===\n` + a.text.trim());
     } else {
       emit(`  reading image: ${a.name}…\n`, "sys");
       const desc = await callClaude({
-        key, model, system: IMAGE_DIGEST_SYSTEM, maxTokens: 1000,
+        key, model: MODEL, system: IMAGE_DIGEST_SYSTEM, maxTokens: 1000,
         content: [
           { type: "image", source: { type: "base64", media_type: a.mediaType, data: a.data } },
           { type: "text", text: `Describe this source (${a.name}) faithfully.` },
@@ -272,30 +255,28 @@ function buildPrompt(problem, transcript, mode, corpus, { opening, debrief } = {
 async function run() {
   const key = document.getElementById("key").value.trim();
   const problem = document.getElementById("problem").value.trim();
-  const refs = document.getElementById("refs").value;
-  const mode = document.getElementById("mode").value;
-  const model = document.getElementById("model").value;
-  const maxTokens = parseInt(document.getElementById("length").value, 10);
+  const mode = document.querySelector('input[name="mode"]:checked').value;
   const go = document.getElementById("go");
 
   out().textContent = "";
   if (!key) { emit("⚠ Please paste your Anthropic API key.\n", "err"); return; }
-  if (!problem && !refs.trim() && attachments.length === 0) {
-    emit("⚠ Enter a problem, or add some reference material.\n", "err"); return;
+  if (!problem && attachments.length === 0) {
+    emit("⚠ Enter a problem, or upload a document.\n", "err"); return;
   }
 
   go.disabled = true; go.textContent = "Running…";
   try {
     let corpus = "";
-    if (refs.trim() || attachments.length) {
+    if (attachments.length) {
       emit("[gathering source material…]\n", "sys");
-      corpus = await buildCorpus({ key, model, refs });
+      corpus = await buildCorpus({ key });
     }
     const order = SEQUENCES[mode];
     const transcript = [];
 
     banner("🔵", `Blue Hat — Opening  (${mode})`, "blue");
-    const opening = await callClaude({ key, model, maxTokens, system: BLUE_OPEN,
+    const opening = await callClaude({ key, model: MODEL, maxTokens: MAX_TOKENS,
+      system: BLUE_OPEN + BREVITY,
       content: buildPrompt(problem, transcript, mode, corpus, { opening: true }),
       onText: (t) => emit(t) });
     transcript.push(`[Blue Hat — Opening]\n${opening}`);
@@ -303,14 +284,16 @@ async function run() {
     for (const hatKey of order) {
       const hat = HATS[hatKey];
       banner(hat.emoji, hat.name, hatKey);
-      const ans = await callClaude({ key, model, maxTokens, system: hat.system,
+      const ans = await callClaude({ key, model: MODEL, maxTokens: MAX_TOKENS,
+        system: hat.system + BREVITY,
         content: buildPrompt(problem, transcript, mode, corpus),
         onText: (t) => emit(t) });
       transcript.push(`[${hat.name}]\n${ans}`);
     }
 
     banner("🔵", "Blue Hat — Debrief & Decision", "blue");
-    await callClaude({ key, model, maxTokens, system: BLUE_DEBRIEF,
+    await callClaude({ key, model: MODEL, maxTokens: MAX_TOKENS,
+      system: BLUE_DEBRIEF + BREVITY,
       content: buildPrompt(problem, transcript, mode, corpus, { debrief: true }),
       onText: (t) => emit(t) });
 
@@ -324,17 +307,6 @@ async function run() {
 
 // ---- Wiring ----------------------------------------------------------------
 window.addEventListener("DOMContentLoaded", () => {
-  const keyEl = document.getElementById("key");
-  const remember = document.getElementById("remember");
-  const saved = localStorage.getItem("sixhats_key");
-  if (saved) { keyEl.value = saved; remember.checked = true; }
-  const persist = () => {
-    if (remember.checked) localStorage.setItem("sixhats_key", keyEl.value);
-    else localStorage.removeItem("sixhats_key");
-  };
-  keyEl.addEventListener("input", persist);
-  remember.addEventListener("change", persist);
-
   const drop = document.getElementById("drop");
   const fileInput = document.getElementById("file");
   drop.addEventListener("click", () => fileInput.click());

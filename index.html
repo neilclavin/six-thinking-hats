@@ -78,7 +78,7 @@
     <div id="atts"></div>
 
     <button id="go" type="submit">Run the council</button>
-    <div class="hint" style="margin-top:10px">Each run is ~7 short calls billed to your key on Sonnet — a few cents.</div>
+    <div class="hint" style="margin-top:10px">Each run is ~7 very short calls billed to your key on Sonnet — a couple of cents.</div>
   </form>
   <div id="out"><span class="idle">Fill in the form and press Run. The six hats will appear here, one at a time, ending with the Blue Hat's decision.</span></div>
 </div>
@@ -102,9 +102,9 @@ const HATS = {
     "You are wearing the Green Hat in a Six Thinking Hats session. Your ONLY mode is creativity and new ideas. Generate alternatives, provocations, and fresh possibilities — including ones that reframe the problem or turn a Black Hat risk into a design opportunity. Quantity and novelty over polish. Do NOT judge or evaluate the ideas you produce; just put them on the table." },
 };
 const BLUE_OPEN =
-  "You are wearing the Blue Hat in a Six Thinking Hats session — you manage the thinking process. Open the session: restate the problem crisply, name the goal and what a good outcome looks like, surface any assumptions or scope boundaries worth fixing up front, and state the hat sequence the team will follow. Be brief and directive. Do NOT solve the problem yourself or wear any of the other hats — you are setting the agenda.";
+  "You are wearing the Blue Hat in a Six Thinking Hats session — you manage the thinking process. In 2-3 short sentences: state the problem or decision, and say whether this is an exploration (finding ideas) or evaluation (deciding) session. Nothing more — do NOT solve the problem yourself or wear any of the other hats.";
 const BLUE_DEBRIEF =
-  "You are wearing the Blue Hat in a Six Thinking Hats session — you manage the thinking process. The team has now cycled through the other hats (their contributions are in the transcript above). Debrief: synthesize what was learned across all hats, state a clear recommendation or decision, note the key risks to manage and information still needed, and list concrete, assignable next steps. Do NOT simply re-list each hat — integrate them into a judgement the team can act on.";
+  "You are wearing the Blue Hat in a Six Thinking Hats session — you manage the thinking process. The team has cycled through the other hats (their contributions are in the transcript above). In 2-3 short sentences: give ONE clear recommendation or decision and ONE concrete next step. Do NOT re-list what each hat said — just the verdict.";
 const IMAGE_DIGEST_SYSTEM =
   "You are a neutral research assistant. Describe this image faithfully for a decision-making session: its content, structure, and any text it contains. Do not add opinions or recommendations.";
 const SEQUENCES = {
@@ -114,8 +114,11 @@ const SEQUENCES = {
 
 // Fixed, simple defaults — no picker for these.
 const MODEL = "claude-sonnet-5";
-const MAX_TOKENS = 1200; // ~50% of the app's former default length
-const BREVITY = " Keep your response concise: about 100-150 words, short bullets are fine — no filler.";
+// The 5 hats: a hard one-or-two-sentence cap, enforced by instruction + a low ceiling.
+const HAT_MAX_TOKENS = 100;
+const HAT_BREVITY = " Respond in ONLY one or two sentences — your single sharpest point in this mode. No preamble, no lists, no repeating the problem.";
+// Blue's two turns: instructions already specify a sentence budget, so no suffix needed.
+const BLUE_MAX_TOKENS = 200;
 
 // ---- Attachments -----------------------------------------------------------
 let attachments = []; // {name, kind:'text'|'image', text?, mediaType?, data?}
@@ -275,8 +278,8 @@ async function run() {
     const transcript = [];
 
     banner("🔵", `Blue Hat — Opening  (${mode})`, "blue");
-    const opening = await callClaude({ key, model: MODEL, maxTokens: MAX_TOKENS,
-      system: BLUE_OPEN + BREVITY,
+    const opening = await callClaude({ key, model: MODEL, maxTokens: BLUE_MAX_TOKENS,
+      system: BLUE_OPEN,
       content: buildPrompt(problem, transcript, mode, corpus, { opening: true }),
       onText: (t) => emit(t) });
     transcript.push(`[Blue Hat — Opening]\n${opening}`);
@@ -284,16 +287,16 @@ async function run() {
     for (const hatKey of order) {
       const hat = HATS[hatKey];
       banner(hat.emoji, hat.name, hatKey);
-      const ans = await callClaude({ key, model: MODEL, maxTokens: MAX_TOKENS,
-        system: hat.system + BREVITY,
+      const ans = await callClaude({ key, model: MODEL, maxTokens: HAT_MAX_TOKENS,
+        system: hat.system + HAT_BREVITY,
         content: buildPrompt(problem, transcript, mode, corpus),
         onText: (t) => emit(t) });
       transcript.push(`[${hat.name}]\n${ans}`);
     }
 
     banner("🔵", "Blue Hat — Debrief & Decision", "blue");
-    await callClaude({ key, model: MODEL, maxTokens: MAX_TOKENS,
-      system: BLUE_DEBRIEF + BREVITY,
+    await callClaude({ key, model: MODEL, maxTokens: BLUE_MAX_TOKENS,
+      system: BLUE_DEBRIEF,
       content: buildPrompt(problem, transcript, mode, corpus, { debrief: true }),
       onText: (t) => emit(t) });
 

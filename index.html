@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Six Thinking Hats — AI council</title>
 <style>
   :root { color-scheme: light dark; --bg:#0f1115; --panel:#161922; --line:#262a33;
@@ -12,27 +12,35 @@
   html, body { height: 100%; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system,
          BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  header { padding: 18px 24px; border-bottom: 1px solid var(--line); }
-  header h1 { margin: 0; font-size: 19px; }
-  header p { margin: 4px 0 0; color: var(--dim); font-size: 13px; }
-  .wrap { display: grid; grid-template-columns: 380px 1fr; min-height: calc(100vh - 70px); }
-  form { padding: 18px 22px; border-right: 1px solid var(--line); overflow-y: auto; }
+  .hidden { display: none !important; }
+
+  /* ---- Setup screen ---- */
+  #setup { min-height: 100vh; display: flex; justify-content: center; padding: 28px 20px 40px; }
+  #setup .inner { width: 100%; max-width: 420px; }
+  #setup h1 { margin: 0 0 4px; font-size: 19px; }
+  #setup .sub { margin: 0 0 22px; color: var(--dim); font-size: 13px; }
   label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
           color: var(--dim); margin: 16px 0 6px; }
-  input, textarea, select { width: 100%; padding: 9px 11px; background: var(--field);
+  input, textarea { width: 100%; padding: 11px 12px; background: var(--field);
           border: 1px solid var(--border); border-radius: 8px; color: var(--ink);
-          font-size: 14px; font-family: inherit; }
-  textarea { resize: vertical; min-height: 60px; }
-  .radios { display: flex; gap: 16px; margin-top: 4px; }
-  .radios label { display: flex; align-items: center; gap: 6px; margin: 0; text-transform: none;
-                  letter-spacing: 0; font-size: 14px; color: var(--ink); cursor: pointer; }
-  .radios input { width: auto; }
-  button { margin-top: 18px; width: 100%; padding: 12px; border: 0; border-radius: 8px;
-           background: var(--accent); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
+          font-size: 15px; font-family: inherit; }
+  button { margin-top: 18px; width: 100%; padding: 13px; border: 0; border-radius: 8px;
+           background: var(--accent); color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; }
   button:disabled { opacity: .5; cursor: default; }
   .hint { font-size: 12px; color: var(--faint); margin-top: 6px; line-height: 1.45; }
   .hint a { color: #7aa2ff; }
-  #drop { margin-top: 6px; padding: 14px; border: 1.5px dashed var(--border); border-radius: 8px;
+  .hint.err { color: #ff6b6b; }
+
+  /* Segmented Exploration/Evaluation toggle */
+  .segmented { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .segmented input { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
+  .segmented label { flex: 1; text-align: center; padding: 11px 8px; margin: 0; cursor: pointer;
+                      text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--ink);
+                      background: var(--field); transition: background .15s, color .15s; }
+  .segmented label:first-of-type { border-right: 1px solid var(--border); }
+  .segmented input:checked + label { background: var(--accent); color: #fff; }
+
+  #drop { margin-top: 6px; padding: 16px; border: 1.5px dashed var(--border); border-radius: 8px;
           text-align: center; color: var(--faint); font-size: 13px; cursor: pointer; }
   #drop.over { border-color: var(--accent); color: var(--ink); }
   .att { display: flex; justify-content: space-between; align-items: center; gap: 8px;
@@ -40,47 +48,94 @@
          padding: 6px 10px; margin-top: 6px; font-size: 13px; }
   .att button { width: auto; margin: 0; padding: 2px 8px; background: transparent; color: var(--faint);
                 font-size: 16px; line-height: 1; }
-  #out { padding: 20px 28px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
-         font: 13.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .banner { font-weight: 700; }
-  .white{color:#e8e8ea} .red{color:#ff6b6b} .black{color:#b7bdc9}
-  .yellow{color:#ffd24a} .green{color:#4ade80} .blue{color:#6ea8ff}
-  .sys { color: var(--faint); font-style: italic; }
-  .err { color:#ff6b6b; font-weight:600; }
-  .idle { color: var(--faint); }
+
+  /* ---- Session screen: full-screen card carousel ---- */
+  #session { position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--bg); }
+  .topbar { display: flex; align-items: center; justify-content: space-between;
+            padding: calc(14px + env(safe-area-inset-top)) 16px 10px; }
+  .iconbtn { width: auto; margin: 0; padding: 6px 8px; background: transparent; border: 0;
+             color: var(--dim); font-size: 20px; cursor: pointer; line-height: 1; }
+  .dots { display: flex; gap: 7px; align-items: center; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; opacity: .3; cursor: default; }
+  .dot.ready { opacity: .9; }
+  .dot.clickable { cursor: pointer; }
+  .dot.current { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  #card { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+          gap: 18px; padding: 24px; text-align: center; max-width: 480px; margin: 0 auto; width: 100%;
+          touch-action: pan-y; }
+  .cardIcon { font-size: 68px; width: 140px; height: 140px; border-radius: 50%; display: flex;
+              align-items: center; justify-content: center; cursor: pointer; user-select: none; }
+  .hc-white  { background: rgba(232,232,234,.12); }
+  .hc-red    { background: rgba(255,107,107,.16); }
+  .hc-black  { background: rgba(183,189,201,.12); }
+  .hc-yellow { background: rgba(255,210,74,.16); }
+  .hc-green  { background: rgba(74,222,128,.16); }
+  .hc-blue   { background: rgba(110,168,255,.16); }
+  .cardName { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); }
+  .cardText { font-size: 19px; line-height: 1.5; max-width: 40ch; }
+  .cardText.thinking { color: var(--faint); font-style: italic; }
+  .cardText.err { color: #ff6b6b; font-size: 15px; }
+
+  .navbar { display: flex; justify-content: space-between; align-items: center;
+            padding: 14px 24px calc(26px + env(safe-area-inset-bottom)); }
+  .navbtn { width: 54px; height: 54px; border-radius: 50%; font-size: 22px; margin: 0;
+            background: var(--field); border: 1px solid var(--border); color: var(--ink); }
+  .navbtn:disabled { opacity: .3; }
 </style>
 </head>
 <body>
-<header>
-  <h1>🎩 Six Thinking Hats — AI council</h1>
-  <p>Edward de Bono's method as six AI agents. Runs in your browser with your own Anthropic API key.</p>
-</header>
-<div class="wrap">
-  <form id="f">
-    <label for="key">Your Anthropic API key</label>
-    <input type="password" id="key" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
-    <div class="hint">Stays in your browser, sent only to Anthropic. No key?
-      <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get one here</a> (needs a little billing credit).</div>
 
-    <label for="problem">Problem / decision</label>
-    <input type="text" id="problem" placeholder="e.g. Should we add a mid-tier plan and change our free tier?">
-    <div class="hint">Optional if you upload documents below — the Blue Hat will frame the question from them.</div>
+<div id="setup">
+  <div class="inner">
+    <h1>🎩 Six Thinking Hats</h1>
+    <p class="sub">Edward de Bono's method as six AI voices. Runs in your browser with your own Anthropic API key.</p>
 
-    <label>Approach</label>
-    <div class="radios">
-      <label><input type="radio" name="mode" value="exploration" checked> Exploration</label>
-      <label><input type="radio" name="mode" value="evaluation"> Evaluation</label>
-    </div>
+    <form id="f">
+      <label for="key">Your Anthropic API key</label>
+      <input type="password" id="key" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
+      <div class="hint">Stays in your browser, sent only to Anthropic. No key?
+        <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get one here</a> (needs a little billing credit).</div>
 
-    <label>Upload documents</label>
-    <div id="drop">Drop <b>.txt / .md</b> files or images here, or click to choose</div>
-    <input type="file" id="file" multiple accept=".txt,.md,.markdown,text/*,image/*" style="display:none">
-    <div id="atts"></div>
+      <label for="problem">Problem / decision</label>
+      <input type="text" id="problem" placeholder="e.g. Should we add a mid-tier plan and change our free tier?">
+      <div class="hint">Optional if you upload documents below — the Blue Hat will frame the question from them.</div>
 
-    <button id="go" type="submit">Run the council</button>
-    <div class="hint" style="margin-top:10px">Each run is ~7 very short calls billed to your key on Sonnet — a couple of cents.</div>
-  </form>
-  <div id="out"><span class="idle">Fill in the form and press Run. The six hats will appear here, one at a time, ending with the Blue Hat's decision.</span></div>
+      <label>Approach</label>
+      <div class="segmented">
+        <input type="radio" id="mode-exploration" name="mode" value="exploration" checked>
+        <label for="mode-exploration">Exploration</label>
+        <input type="radio" id="mode-evaluation" name="mode" value="evaluation">
+        <label for="mode-evaluation">Evaluation</label>
+      </div>
+
+      <label>Upload documents</label>
+      <div id="drop">Drop <b>.txt / .md</b> files or images here, or click to choose</div>
+      <input type="file" id="file" multiple accept=".txt,.md,.markdown,text/*,image/*" style="display:none">
+      <div id="atts"></div>
+
+      <button id="go" type="submit">Run the council</button>
+      <div class="hint err hidden" id="setupErr"></div>
+      <div class="hint" style="margin-top:10px">Each run is ~7 very short calls billed to your key on Sonnet — a couple of cents.</div>
+    </form>
+  </div>
+</div>
+
+<div id="session" class="hidden">
+  <div class="topbar">
+    <button id="restart" class="iconbtn" type="button" title="Start over">↺</button>
+    <div id="dots" class="dots"></div>
+    <button id="mute" class="iconbtn" type="button" title="Mute">🔊</button>
+  </div>
+  <div id="card">
+    <div id="cardIcon" class="cardIcon">🔵</div>
+    <div id="cardName" class="cardName"></div>
+    <div id="cardText" class="cardText thinking">thinking…</div>
+  </div>
+  <div class="navbar">
+    <button id="prev" class="navbtn" type="button">‹</button>
+    <button id="next" class="navbtn" type="button">›</button>
+  </div>
 </div>
 
 <script>
@@ -114,11 +169,21 @@ const SEQUENCES = {
 
 // Fixed, simple defaults — no picker for these.
 const MODEL = "claude-sonnet-5";
-// The 5 hats: a hard one-or-two-sentence cap, enforced by instruction + a low ceiling.
 const HAT_MAX_TOKENS = 100;
 const HAT_BREVITY = " Respond in ONLY one or two sentences — your single sharpest point in this mode. No preamble, no lists, no repeating the problem.";
-// Blue's two turns: instructions already specify a sentence budget, so no suffix needed.
 const BLUE_MAX_TOKENS = 200;
+
+// Per-hat voice personality: pitch/rate on top of whatever system voice is picked.
+const HAT_VOICE_PROFILE = {
+  blue:   { pitch: 1.00, rate: 1.00 },
+  white:  { pitch: 0.95, rate: 1.00 },
+  red:    { pitch: 1.30, rate: 1.15 },
+  black:  { pitch: 0.75, rate: 0.90 },
+  yellow: { pitch: 1.15, rate: 1.10 },
+  green:  { pitch: 1.10, rate: 1.20 },
+};
+const HAT_HEX = { white: "#e8e8ea", red: "#ff6b6b", black: "#b7bdc9",
+                  yellow: "#ffd24a", green: "#4ade80", blue: "#6ea8ff" };
 
 // ---- Attachments -----------------------------------------------------------
 let attachments = []; // {name, kind:'text'|'image', text?, mediaType?, data?}
@@ -204,20 +269,6 @@ async function callClaude({ key, model, system, content, maxTokens, onText }) {
   return full;
 }
 
-// ---- Output helpers --------------------------------------------------------
-const out = () => document.getElementById("out");
-function emit(text, className) {
-  const s = document.createElement("span");
-  if (className) s.className = className;
-  s.textContent = text;
-  out().appendChild(s);
-  out().scrollTop = out().scrollHeight;
-}
-function banner(emoji, title, hatKey) {
-  const line = "─".repeat(64);
-  emit(`\n${line}\n${emoji}  ${title}\n${line}\n`, "banner " + (hatKey || ""));
-}
-
 // ---- Build the source-material block --------------------------------------
 async function buildCorpus({ key }) {
   const parts = [];
@@ -225,7 +276,6 @@ async function buildCorpus({ key }) {
     if (a.kind === "text") {
       parts.push(`=== [file] ${a.name} ===\n` + a.text.trim());
     } else {
-      emit(`  reading image: ${a.name}…\n`, "sys");
       const desc = await callClaude({
         key, model: MODEL, system: IMAGE_DIGEST_SYSTEM, maxTokens: 1000,
         content: [
@@ -254,62 +304,196 @@ function buildPrompt(problem, transcript, mode, corpus, { opening, debrief } = {
   return parts.join("\n");
 }
 
-// ---- Run the whole council -------------------------------------------------
-async function run() {
-  const key = document.getElementById("key").value.trim();
-  const problem = document.getElementById("problem").value.trim();
-  const mode = document.querySelector('input[name="mode"]:checked').value;
-  const go = document.getElementById("go");
+// ---- Speech (Web Speech API) -----------------------------------------------
+let pickedVoices = {};
+let muted = false;
 
-  out().textContent = "";
-  if (!key) { emit("⚠ Please paste your Anthropic API key.\n", "err"); return; }
-  if (!problem && attachments.length === 0) {
-    emit("⚠ Enter a problem, or upload a document.\n", "err"); return;
+function loadVoices() {
+  return new Promise((resolve) => {
+    const existing = speechSynthesis.getVoices();
+    if (existing.length) return resolve(existing);
+    speechSynthesis.onvoiceschanged = () => resolve(speechSynthesis.getVoices());
+    setTimeout(() => resolve(speechSynthesis.getVoices()), 500); // fallback if the event never fires
+  });
+}
+
+async function pickVoices() {
+  if (!("speechSynthesis" in window)) return;
+  const voices = await loadVoices();
+  const enVoices = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith("en"));
+  const pool = enVoices.length ? enVoices : voices;
+  if (!pool.length) return;
+  Object.keys(HAT_VOICE_PROFILE).forEach((colorClass, i) => {
+    pickedVoices[colorClass] = pool[i % pool.length];
+  });
+}
+
+function speak(index) {
+  return new Promise((resolve) => {
+    const card = cards[index];
+    if (muted || !("speechSynthesis" in window) || !card || !card.text) return resolve();
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(card.text);
+    const profile = HAT_VOICE_PROFILE[card.colorClass] || { pitch: 1, rate: 1 };
+    u.pitch = profile.pitch; u.rate = profile.rate;
+    if (pickedVoices[card.colorClass]) u.voice = pickedVoices[card.colorClass];
+    u.onend = () => resolve();
+    u.onerror = () => resolve();
+    speechSynthesis.speak(u);
+  });
+}
+
+// ---- Card / carousel state --------------------------------------------------
+let cards = [];
+let currentIndex = 0;
+let activeIndex = 0;   // the turn currently generating/spoken — the navigable frontier
+let following = true;  // true while the viewer is riding the live edge
+let errorMessage = null;
+
+function buildTurns(mode) {
+  const order = SEQUENCES[mode];
+  const turnKeys = ["blue-open", ...order, "blue-debrief"];
+  return turnKeys.map((tkey) => {
+    if (tkey === "blue-open")
+      return { turnKey: tkey, name: "Blue Hat — Opening", emoji: "🔵", colorClass: "blue", text: "", ready: false };
+    if (tkey === "blue-debrief")
+      return { turnKey: tkey, name: "Blue Hat — Debrief", emoji: "🔵", colorClass: "blue", text: "", ready: false };
+    const hat = HATS[tkey];
+    return { turnKey: tkey, name: hat.name, emoji: hat.emoji, colorClass: tkey, text: "", ready: false };
+  });
+}
+
+function renderCard() {
+  const c = cards[currentIndex];
+  if (!c) return;
+  const icon = document.getElementById("cardIcon");
+  icon.textContent = c.emoji;
+  icon.className = "cardIcon hc-" + c.colorClass;
+  document.getElementById("cardName").textContent = c.name;
+
+  const textEl = document.getElementById("cardText");
+  if (errorMessage && currentIndex === activeIndex) {
+    textEl.textContent = "⚠ " + errorMessage;
+    textEl.className = "cardText err";
+  } else if (c.text) {
+    textEl.textContent = c.text;
+    textEl.className = "cardText";
+  } else {
+    textEl.textContent = "🎩 thinking…";
+    textEl.className = "cardText thinking";
   }
 
-  go.disabled = true; go.textContent = "Running…";
+  document.getElementById("prev").disabled = currentIndex === 0;
+  document.getElementById("next").disabled = currentIndex >= activeIndex;
+  renderDots();
+}
+
+function renderDots() {
+  const box = document.getElementById("dots");
+  box.innerHTML = "";
+  cards.forEach((c, i) => {
+    const d = document.createElement("span");
+    let cls = "dot" + (c.ready ? " ready" : "") + (i === currentIndex ? " current" : "");
+    if (i <= activeIndex) cls += " clickable";
+    d.className = cls;
+    d.style.background = HAT_HEX[c.colorClass] || "#888";
+    d.title = c.name;
+    if (i <= activeIndex) d.addEventListener("click", () => goTo(i));
+    box.appendChild(d);
+  });
+}
+
+function goTo(i) {
+  currentIndex = Math.max(0, Math.min(i, activeIndex));
+  following = currentIndex === activeIndex;
+  renderCard();
+}
+function prev() { goTo(currentIndex - 1); }
+function next() { goTo(currentIndex + 1); }
+
+// ---- Run the whole council, one card per turn ------------------------------
+async function runCouncil({ key, problem, mode }) {
   try {
     let corpus = "";
     if (attachments.length) {
-      emit("[gathering source material…]\n", "sys");
+      document.getElementById("cardText").textContent = "📎 reading documents…";
+      document.getElementById("cardText").className = "cardText thinking";
       corpus = await buildCorpus({ key });
     }
+
     const order = SEQUENCES[mode];
+    const turnKeys = ["blue-open", ...order, "blue-debrief"];
     const transcript = [];
 
-    banner("🔵", `Blue Hat — Opening  (${mode})`, "blue");
-    const opening = await callClaude({ key, model: MODEL, maxTokens: BLUE_MAX_TOKENS,
-      system: BLUE_OPEN,
-      content: buildPrompt(problem, transcript, mode, corpus, { opening: true }),
-      onText: (t) => emit(t) });
-    transcript.push(`[Blue Hat — Opening]\n${opening}`);
+    for (let i = 0; i < turnKeys.length; i++) {
+      activeIndex = i;
+      if (following) currentIndex = i;
+      renderCard();
 
-    for (const hatKey of order) {
-      const hat = HATS[hatKey];
-      banner(hat.emoji, hat.name, hatKey);
-      const ans = await callClaude({ key, model: MODEL, maxTokens: HAT_MAX_TOKENS,
-        system: hat.system + HAT_BREVITY,
-        content: buildPrompt(problem, transcript, mode, corpus),
-        onText: (t) => emit(t) });
-      transcript.push(`[${hat.name}]\n${ans}`);
+      const tkey = turnKeys[i];
+      const isOpen = tkey === "blue-open";
+      const isDebrief = tkey === "blue-debrief";
+      const hat = (!isOpen && !isDebrief) ? HATS[tkey] : null;
+      const system = isOpen ? BLUE_OPEN : isDebrief ? BLUE_DEBRIEF : (hat.system + HAT_BREVITY);
+      const maxTokens = (isOpen || isDebrief) ? BLUE_MAX_TOKENS : HAT_MAX_TOKENS;
+      const opts = isOpen ? { opening: true } : isDebrief ? { debrief: true } : {};
+
+      const text = await callClaude({
+        key, model: MODEL, maxTokens, system,
+        content: buildPrompt(problem, transcript, mode, corpus, opts),
+        onText: (t) => { cards[i].text += t; if (i === currentIndex) renderCard(); },
+      });
+
+      cards[i].ready = true;
+      transcript.push(`[${cards[i].name}]\n${text}`);
+      renderCard();
+
+      if (following) await speak(i); // only auto-speak if the viewer is watching live
     }
-
-    banner("🔵", "Blue Hat — Debrief & Decision", "blue");
-    await callClaude({ key, model: MODEL, maxTokens: BLUE_MAX_TOKENS,
-      system: BLUE_DEBRIEF,
-      content: buildPrompt(problem, transcript, mode, corpus, { debrief: true }),
-      onText: (t) => emit(t) });
-
-    emit("\n\n✔ Session complete.\n", "sys");
   } catch (err) {
-    emit("\n⚠ " + err.message + "\n", "err");
-  } finally {
-    go.disabled = false; go.textContent = "Run the council";
+    errorMessage = err.message;
+    renderCard();
   }
+}
+
+function startSession() {
+  const key = document.getElementById("key").value.trim();
+  const problem = document.getElementById("problem").value.trim();
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  const errEl = document.getElementById("setupErr");
+  errEl.classList.add("hidden");
+
+  if (!key) { errEl.textContent = "⚠ Please paste your Anthropic API key."; errEl.classList.remove("hidden"); return; }
+  if (!problem && attachments.length === 0) {
+    errEl.textContent = "⚠ Enter a problem, or upload a document."; errEl.classList.remove("hidden"); return;
+  }
+
+  document.getElementById("setup").classList.add("hidden");
+  document.getElementById("session").classList.remove("hidden");
+
+  cards = buildTurns(mode);
+  currentIndex = 0; activeIndex = 0; following = true; errorMessage = null;
+  renderCard();
+
+  runCouncil({ key, problem, mode });
+}
+
+function restart() {
+  if ("speechSynthesis" in window) speechSynthesis.cancel();
+  document.getElementById("session").classList.add("hidden");
+  document.getElementById("setup").classList.remove("hidden");
+}
+
+function toggleMute() {
+  muted = !muted;
+  document.getElementById("mute").textContent = muted ? "🔇" : "🔊";
+  if (muted && "speechSynthesis" in window) speechSynthesis.cancel();
 }
 
 // ---- Wiring ----------------------------------------------------------------
 window.addEventListener("DOMContentLoaded", () => {
+  pickVoices(); // fire and forget — populates pickedVoices when the OS voice list loads
+
   const drop = document.getElementById("drop");
   const fileInput = document.getElementById("file");
   drop.addEventListener("click", () => fileInput.click());
@@ -318,7 +502,32 @@ window.addEventListener("DOMContentLoaded", () => {
   ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
   drop.addEventListener("drop", (e) => { if (e.dataTransfer.files) addFiles(e.dataTransfer.files); });
 
-  document.getElementById("f").addEventListener("submit", (e) => { e.preventDefault(); run(); });
+  document.getElementById("f").addEventListener("submit", (e) => {
+    e.preventDefault();
+    // iOS/Safari blocks speech after an await unless the engine is "unlocked"
+    // synchronously inside a user gesture — do that here, before any async work.
+    if ("speechSynthesis" in window) {
+      try { const u = new SpeechSynthesisUtterance(""); u.volume = 0; speechSynthesis.speak(u); } catch (e) {}
+    }
+    startSession();
+  });
+
+  document.getElementById("restart").addEventListener("click", restart);
+  document.getElementById("mute").addEventListener("click", toggleMute);
+  document.getElementById("prev").addEventListener("click", prev);
+  document.getElementById("next").addEventListener("click", next);
+  document.getElementById("cardIcon").addEventListener("click", () => { if (!muted) speak(currentIndex); });
+
+  let touchX = null;
+  const card = document.getElementById("card");
+  card.addEventListener("touchstart", (e) => { touchX = e.touches[0].clientX; });
+  card.addEventListener("touchend", (e) => {
+    if (touchX === null) return;
+    const dx = e.changedTouches[0].clientX - touchX;
+    touchX = null;
+    if (Math.abs(dx) < 40) return;
+    if (dx < 0) next(); else prev();
+  });
 });
 </script>
 </body>

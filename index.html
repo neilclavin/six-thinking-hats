@@ -55,15 +55,10 @@
             padding: calc(14px + env(safe-area-inset-top)) 16px 10px; }
   .iconbtn { width: auto; margin: 0; padding: 6px 8px; background: transparent; border: 0;
              color: var(--dim); font-size: 20px; cursor: pointer; line-height: 1; }
-  .dots { display: flex; gap: 7px; align-items: center; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; opacity: .3; cursor: default; }
-  .dot.ready { opacity: .9; }
-  .dot.clickable { cursor: pointer; }
-  .dot.current { outline: 2px solid var(--ink); outline-offset: 2px; }
 
   #card { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-          gap: 18px; padding: 24px; text-align: center; max-width: 480px; margin: 0 auto; width: 100%;
-          touch-action: pan-y; }
+          gap: 14px; padding: 24px calc(20px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-bottom));
+          text-align: center; max-width: 480px; margin: 0 auto; width: 100%; touch-action: pan-y; }
   .cardIcon { font-size: 68px; width: 140px; height: 140px; border-radius: 50%; display: flex;
               align-items: center; justify-content: center; cursor: pointer; user-select: none; }
   .hc-white  { background: rgba(232,232,234,.12); }
@@ -72,14 +67,22 @@
   .hc-yellow { background: rgba(255,210,74,.16); }
   .hc-green  { background: rgba(74,222,128,.16); }
   .hc-blue   { background: rgba(110,168,255,.16); }
+
+  /* Progress dots sit right below the hat graphic. */
+  .dots { display: flex; gap: 7px; justify-content: center; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; opacity: .3; cursor: default; }
+  .dot.ready { opacity: .9; }
+  .dot.clickable { cursor: pointer; }
+  .dot.current { outline: 2px solid var(--ink); outline-offset: 2px; }
+
   .cardName { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); }
-  .cardText { font-size: 19px; line-height: 1.5; max-width: 40ch; }
+
+  /* Response text sits between the back and forward arrows. */
+  .textRow { display: flex; align-items: center; gap: 12px; width: 100%; }
+  .cardText { flex: 1; font-size: 18px; line-height: 1.5; }
   .cardText.thinking { color: var(--faint); font-style: italic; }
   .cardText.err { color: #ff6b6b; font-size: 15px; }
-
-  .navbar { display: flex; justify-content: space-between; align-items: center;
-            padding: 14px 24px calc(26px + env(safe-area-inset-bottom)); }
-  .navbtn { width: 54px; height: 54px; border-radius: 50%; font-size: 22px; margin: 0;
+  .navbtn { width: 44px; height: 44px; flex-shrink: 0; border-radius: 50%; font-size: 20px; margin: 0;
             background: var(--field); border: 1px solid var(--border); color: var(--ink); }
   .navbtn:disabled { opacity: .3; }
 </style>
@@ -124,17 +127,17 @@
 <div id="session" class="hidden">
   <div class="topbar">
     <button id="restart" class="iconbtn" type="button" title="Start over">↺</button>
-    <div id="dots" class="dots"></div>
     <button id="mute" class="iconbtn" type="button" title="Mute">🔊</button>
   </div>
   <div id="card">
     <div id="cardIcon" class="cardIcon">🔵</div>
+    <div id="dots" class="dots"></div>
     <div id="cardName" class="cardName"></div>
-    <div id="cardText" class="cardText thinking">thinking…</div>
-  </div>
-  <div class="navbar">
-    <button id="prev" class="navbtn" type="button">‹</button>
-    <button id="next" class="navbtn" type="button">›</button>
+    <div class="textRow">
+      <button id="prev" class="navbtn" type="button">‹</button>
+      <div id="cardText" class="cardText thinking">thinking…</div>
+      <button id="next" class="navbtn" type="button">›</button>
+    </div>
   </div>
 </div>
 
@@ -344,11 +347,13 @@ function speak(index) {
 }
 
 // ---- Card / carousel state --------------------------------------------------
+// No autoplay: cards are generated and spoken only in direct response to the
+// user clicking Next (or swiping forward) — nothing advances by itself.
 let cards = [];
 let currentIndex = 0;
-let activeIndex = 0;   // the turn currently generating/spoken — the navigable frontier
-let following = true;  // true while the viewer is riding the live edge
+let generating = false;
 let errorMessage = null;
+let session = null; // { key, problem, mode, corpus, transcript }
 
 function buildTurns(mode) {
   const order = SEQUENCES[mode];
@@ -372,7 +377,7 @@ function renderCard() {
   document.getElementById("cardName").textContent = c.name;
 
   const textEl = document.getElementById("cardText");
-  if (errorMessage && currentIndex === activeIndex) {
+  if (errorMessage) {
     textEl.textContent = "⚠ " + errorMessage;
     textEl.className = "cardText err";
   } else if (c.text) {
@@ -383,8 +388,8 @@ function renderCard() {
     textEl.className = "cardText thinking";
   }
 
-  document.getElementById("prev").disabled = currentIndex === 0;
-  document.getElementById("next").disabled = currentIndex >= activeIndex;
+  document.getElementById("prev").disabled = generating || currentIndex === 0;
+  document.getElementById("next").disabled = generating || (currentIndex >= cards.length - 1 && c.ready);
   renderDots();
 }
 
@@ -394,69 +399,81 @@ function renderDots() {
   cards.forEach((c, i) => {
     const d = document.createElement("span");
     let cls = "dot" + (c.ready ? " ready" : "") + (i === currentIndex ? " current" : "");
-    if (i <= activeIndex) cls += " clickable";
+    const clickable = i < currentIndex;
+    if (clickable) cls += " clickable";
     d.className = cls;
     d.style.background = HAT_HEX[c.colorClass] || "#888";
     d.title = c.name;
-    if (i <= activeIndex) d.addEventListener("click", () => goTo(i));
+    if (clickable) d.addEventListener("click", () => goToVisited(i));
     box.appendChild(d);
   });
 }
 
-function goTo(i) {
-  currentIndex = Math.max(0, Math.min(i, activeIndex));
-  following = currentIndex === activeIndex;
+function goToVisited(i) {
+  if (generating || i >= currentIndex) return;
+  currentIndex = i;
+  errorMessage = null;
   renderCard();
 }
-function prev() { goTo(currentIndex - 1); }
-function next() { goTo(currentIndex + 1); }
 
-// ---- Run the whole council, one card per turn ------------------------------
-async function runCouncil({ key, problem, mode }) {
-  try {
-    let corpus = "";
-    if (attachments.length) {
-      document.getElementById("cardText").textContent = "📎 reading documents…";
-      document.getElementById("cardText").className = "cardText thinking";
-      corpus = await buildCorpus({ key });
-    }
-
-    const order = SEQUENCES[mode];
-    const turnKeys = ["blue-open", ...order, "blue-debrief"];
-    const transcript = [];
-
-    for (let i = 0; i < turnKeys.length; i++) {
-      activeIndex = i;
-      if (following) currentIndex = i;
-      renderCard();
-
-      const tkey = turnKeys[i];
-      const isOpen = tkey === "blue-open";
-      const isDebrief = tkey === "blue-debrief";
-      const hat = (!isOpen && !isDebrief) ? HATS[tkey] : null;
-      const system = isOpen ? BLUE_OPEN : isDebrief ? BLUE_DEBRIEF : (hat.system + HAT_BREVITY);
-      const maxTokens = (isOpen || isDebrief) ? BLUE_MAX_TOKENS : HAT_MAX_TOKENS;
-      const opts = isOpen ? { opening: true } : isDebrief ? { debrief: true } : {};
-
-      const text = await callClaude({
-        key, model: MODEL, maxTokens, system,
-        content: buildPrompt(problem, transcript, mode, corpus, opts),
-        onText: (t) => { cards[i].text += t; if (i === currentIndex) renderCard(); },
-      });
-
-      cards[i].ready = true;
-      transcript.push(`[${cards[i].name}]\n${text}`);
-      renderCard();
-
-      if (following) await speak(i); // only auto-speak if the viewer is watching live
-    }
-  } catch (err) {
-    errorMessage = err.message;
-    renderCard();
-  }
+function goPrev() {
+  if (generating || currentIndex === 0) return;
+  currentIndex -= 1;
+  errorMessage = null;
+  renderCard();
 }
 
-function startSession() {
+// The only way any card advances, generates, or speaks: the user clicked Next
+// (or swiped forward). If the current card errored out, this retries it.
+async function goNext() {
+  if (generating) return;
+  const target = cards[currentIndex].ready ? currentIndex + 1 : currentIndex;
+  if (target >= cards.length) return;
+  await revealCard(target);
+}
+
+async function revealCard(i) {
+  currentIndex = i;
+  errorMessage = null;
+  renderCard();
+  if (!cards[i].ready) {
+    generating = true;
+    renderCard();
+    try {
+      await generateTurn(i);
+    } catch (err) {
+      errorMessage = err.message;
+      generating = false;
+      renderCard();
+      return;
+    }
+    generating = false;
+  }
+  renderCard();
+  if (!muted) await speak(i);
+}
+
+async function generateTurn(i) {
+  const turnKeys = ["blue-open", ...SEQUENCES[session.mode], "blue-debrief"];
+  const tkey = turnKeys[i];
+  const isOpen = tkey === "blue-open";
+  const isDebrief = tkey === "blue-debrief";
+  const hat = (!isOpen && !isDebrief) ? HATS[tkey] : null;
+  const system = isOpen ? BLUE_OPEN : isDebrief ? BLUE_DEBRIEF : (hat.system + HAT_BREVITY);
+  const maxTokens = (isOpen || isDebrief) ? BLUE_MAX_TOKENS : HAT_MAX_TOKENS;
+  const opts = isOpen ? { opening: true } : isDebrief ? { debrief: true } : {};
+
+  const text = await callClaude({
+    key: session.key, model: MODEL, maxTokens, system,
+    content: buildPrompt(session.problem, session.transcript, session.mode, session.corpus, opts),
+    onText: (t) => { cards[i].text += t; if (i === currentIndex) renderCard(); },
+  });
+
+  cards[i].ready = true;
+  session.transcript.push(`[${cards[i].name}]\n${text}`);
+}
+
+async function startSession() {
   const key = document.getElementById("key").value.trim();
   const problem = document.getElementById("problem").value.trim();
   const mode = document.querySelector('input[name="mode"]:checked').value;
@@ -472,10 +489,23 @@ function startSession() {
   document.getElementById("session").classList.remove("hidden");
 
   cards = buildTurns(mode);
-  currentIndex = 0; activeIndex = 0; following = true; errorMessage = null;
+  currentIndex = 0; errorMessage = null; generating = false;
+  session = { key, problem, mode, transcript: [], corpus: "" };
   renderCard();
 
-  runCouncil({ key, problem, mode });
+  try {
+    if (attachments.length) {
+      document.getElementById("cardText").textContent = "📎 reading documents…";
+      document.getElementById("cardText").className = "cardText thinking";
+      session.corpus = await buildCorpus({ key });
+    }
+  } catch (err) {
+    errorMessage = err.message;
+    renderCard();
+    return;
+  }
+
+  await revealCard(0);
 }
 
 function restart() {
@@ -514,10 +544,12 @@ window.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("restart").addEventListener("click", restart);
   document.getElementById("mute").addEventListener("click", toggleMute);
-  document.getElementById("prev").addEventListener("click", prev);
-  document.getElementById("next").addEventListener("click", next);
+  document.getElementById("prev").addEventListener("click", goPrev);
+  document.getElementById("next").addEventListener("click", goNext);
   document.getElementById("cardIcon").addEventListener("click", () => { if (!muted) speak(currentIndex); });
 
+  // Swipe is just another way to trigger the same manual goPrev/goNext — still
+  // no automatic advancing without a direct user gesture.
   let touchX = null;
   const card = document.getElementById("card");
   card.addEventListener("touchstart", (e) => { touchX = e.touches[0].clientX; });
@@ -526,7 +558,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const dx = e.changedTouches[0].clientX - touchX;
     touchX = null;
     if (Math.abs(dx) < 40) return;
-    if (dx < 0) next(); else prev();
+    if (dx < 0) goNext(); else goPrev();
   });
 });
 </script>

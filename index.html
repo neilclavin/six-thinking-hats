@@ -59,14 +59,18 @@
   #card { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
           gap: 14px; padding: 24px calc(20px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-bottom));
           text-align: center; max-width: 480px; margin: 0 auto; width: 100%; touch-action: pan-y; }
-  .cardIcon { font-size: 68px; width: 140px; height: 140px; border-radius: 50%; display: flex;
-              align-items: center; justify-content: center; cursor: pointer; user-select: none; }
-  .hc-white  { background: rgba(232,232,234,.12); }
-  .hc-red    { background: rgba(255,107,107,.16); }
-  .hc-black  { background: rgba(183,189,201,.12); }
-  .hc-yellow { background: rgba(255,210,74,.16); }
-  .hc-green  { background: rgba(74,222,128,.16); }
-  .hc-blue   { background: rgba(110,168,255,.16); }
+  .cardIcon { width: 140px; height: 140px; border-radius: 50%; overflow: hidden; display: flex;
+              align-items: center; justify-content: center; background: #ece9e4;
+              cursor: pointer; user-select: none; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+  .cardImg { width: 100%; height: 100%; object-fit: cover; display: block; }
+  /* One generated cap photo, recolored per hat via CSS filters. Rotate/saturate
+     values were solved numerically against the actual photo, not guessed. */
+  .tint-white  { filter: none; }
+  .tint-red    { filter: grayscale(1) sepia(1) hue-rotate(-56deg) saturate(14) brightness(1); }
+  .tint-yellow { filter: grayscale(1) sepia(1) hue-rotate(0deg) saturate(3.2) brightness(.98); }
+  .tint-green  { filter: grayscale(1) sepia(1) hue-rotate(80deg) saturate(3.4) brightness(.88); }
+  .tint-blue   { filter: grayscale(1) sepia(1) hue-rotate(-166deg) saturate(20) brightness(.95); }
+  .tint-black  { filter: saturate(.5) brightness(.32) contrast(1.15); }
 
   /* Progress dots sit right below the hat graphic. */
   .dots { display: flex; gap: 7px; justify-content: center; }
@@ -92,7 +96,7 @@
 <div id="setup">
   <div class="inner">
     <h1>🎩 Six Thinking Hats</h1>
-    <p class="sub">Edward de Bono's method as six AI voices. Runs in your browser with your own Anthropic API key.</p>
+    <p class="sub">Edward de Bono's method as six AI perspectives. Runs in your browser with your own Anthropic API key.</p>
 
     <form id="f">
       <label for="key">Your Anthropic API key</label>
@@ -127,10 +131,9 @@
 <div id="session" class="hidden">
   <div class="topbar">
     <button id="restart" class="iconbtn" type="button" title="Start over">↺</button>
-    <button id="mute" class="iconbtn" type="button" title="Mute">🔊</button>
   </div>
   <div id="card">
-    <div id="cardIcon" class="cardIcon">🔵</div>
+    <div id="cardIcon" class="cardIcon"><img id="cardImg" class="cardImg tint-blue" src="assets/hats/cap.webp" alt=""></div>
     <div id="dots" class="dots"></div>
     <div id="cardName" class="cardName"></div>
     <div class="textRow">
@@ -176,15 +179,6 @@ const HAT_MAX_TOKENS = 100;
 const HAT_BREVITY = " Respond in ONLY one or two sentences — your single sharpest point in this mode. No preamble, no lists, no repeating the problem.";
 const BLUE_MAX_TOKENS = 200;
 
-// Per-hat voice personality: pitch/rate on top of whatever system voice is picked.
-const HAT_VOICE_PROFILE = {
-  blue:   { pitch: 1.00, rate: 1.00 },
-  white:  { pitch: 0.95, rate: 1.00 },
-  red:    { pitch: 1.30, rate: 1.15 },
-  black:  { pitch: 0.75, rate: 0.90 },
-  yellow: { pitch: 1.15, rate: 1.10 },
-  green:  { pitch: 1.10, rate: 1.20 },
-};
 const HAT_HEX = { white: "#e8e8ea", red: "#ff6b6b", black: "#b7bdc9",
                   yellow: "#ffd24a", green: "#4ade80", blue: "#6ea8ff" };
 
@@ -307,45 +301,6 @@ function buildPrompt(problem, transcript, mode, corpus, { opening, debrief } = {
   return parts.join("\n");
 }
 
-// ---- Speech (Web Speech API) -----------------------------------------------
-let pickedVoices = {};
-let muted = false;
-
-function loadVoices() {
-  return new Promise((resolve) => {
-    const existing = speechSynthesis.getVoices();
-    if (existing.length) return resolve(existing);
-    speechSynthesis.onvoiceschanged = () => resolve(speechSynthesis.getVoices());
-    setTimeout(() => resolve(speechSynthesis.getVoices()), 500); // fallback if the event never fires
-  });
-}
-
-async function pickVoices() {
-  if (!("speechSynthesis" in window)) return;
-  const voices = await loadVoices();
-  const enVoices = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith("en"));
-  const pool = enVoices.length ? enVoices : voices;
-  if (!pool.length) return;
-  Object.keys(HAT_VOICE_PROFILE).forEach((colorClass, i) => {
-    pickedVoices[colorClass] = pool[i % pool.length];
-  });
-}
-
-function speak(index) {
-  return new Promise((resolve) => {
-    const card = cards[index];
-    if (muted || !("speechSynthesis" in window) || !card || !card.text) return resolve();
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(card.text);
-    const profile = HAT_VOICE_PROFILE[card.colorClass] || { pitch: 1, rate: 1 };
-    u.pitch = profile.pitch; u.rate = profile.rate;
-    if (pickedVoices[card.colorClass]) u.voice = pickedVoices[card.colorClass];
-    u.onend = () => resolve();
-    u.onerror = () => resolve();
-    speechSynthesis.speak(u);
-  });
-}
-
 // ---- Card / carousel state --------------------------------------------------
 // No autoplay: cards are generated and spoken only in direct response to the
 // user clicking Next (or swiping forward) — nothing advances by itself.
@@ -371,9 +326,8 @@ function buildTurns(mode) {
 function renderCard() {
   const c = cards[currentIndex];
   if (!c) return;
-  const icon = document.getElementById("cardIcon");
-  icon.textContent = c.emoji;
-  icon.className = "cardIcon hc-" + c.colorClass;
+  const img = document.getElementById("cardImg");
+  img.className = "cardImg tint-" + c.colorClass;
   document.getElementById("cardName").textContent = c.name;
 
   const textEl = document.getElementById("cardText");
@@ -450,7 +404,6 @@ async function revealCard(i) {
     generating = false;
   }
   renderCard();
-  if (!muted) await speak(i);
 }
 
 async function generateTurn(i) {
@@ -509,21 +462,12 @@ async function startSession() {
 }
 
 function restart() {
-  if ("speechSynthesis" in window) speechSynthesis.cancel();
   document.getElementById("session").classList.add("hidden");
   document.getElementById("setup").classList.remove("hidden");
 }
 
-function toggleMute() {
-  muted = !muted;
-  document.getElementById("mute").textContent = muted ? "🔇" : "🔊";
-  if (muted && "speechSynthesis" in window) speechSynthesis.cancel();
-}
-
 // ---- Wiring ----------------------------------------------------------------
 window.addEventListener("DOMContentLoaded", () => {
-  pickVoices(); // fire and forget — populates pickedVoices when the OS voice list loads
-
   const drop = document.getElementById("drop");
   const fileInput = document.getElementById("file");
   drop.addEventListener("click", () => fileInput.click());
@@ -534,19 +478,12 @@ window.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("f").addEventListener("submit", (e) => {
     e.preventDefault();
-    // iOS/Safari blocks speech after an await unless the engine is "unlocked"
-    // synchronously inside a user gesture — do that here, before any async work.
-    if ("speechSynthesis" in window) {
-      try { const u = new SpeechSynthesisUtterance(""); u.volume = 0; speechSynthesis.speak(u); } catch (e) {}
-    }
     startSession();
   });
 
   document.getElementById("restart").addEventListener("click", restart);
-  document.getElementById("mute").addEventListener("click", toggleMute);
   document.getElementById("prev").addEventListener("click", goPrev);
   document.getElementById("next").addEventListener("click", goNext);
-  document.getElementById("cardIcon").addEventListener("click", () => { if (!muted) speak(currentIndex); });
 
   // Swipe is just another way to trigger the same manual goPrev/goNext — still
   // no automatic advancing without a direct user gesture.

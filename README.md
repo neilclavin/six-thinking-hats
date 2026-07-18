@@ -4,10 +4,9 @@ Edward de Bono's **Six Thinking Hats** method, run as six AI agents in your brow
 
 Each hat is one mode of thinking — White (facts), Red (feelings), Black (caution),
 Yellow (benefits), Green (creativity), Blue (process). A Blue Hat frames your problem,
-the other hats weigh in one at a time — **spoken aloud**, each in its own voice — and
-Blue closes with a decision and next step. Because each hat is a *separate* call with its
-own instructions, you get six clean perspectives instead of one answer trying to be
-everything at once.
+the other hats weigh in one at a time, and Blue closes with a decision and next step.
+Because each hat is a *separate* call with its own instructions, you get six clean
+perspectives instead of one answer trying to be everything at once.
 
 It's a **single HTML file** — no install, no server. It runs entirely in your browser and
 talks straight to Claude using **your own** Anthropic API key, built mobile-first as a
@@ -20,10 +19,9 @@ swipeable, full-screen card per hat.
 1. **Paste your Anthropic API key** (see below to get one).
 2. Type a **problem or decision** (and/or upload `.txt`/`.md` files or images), and pick
    **Exploration** (open up ideas) or **Evaluation** (pressure-test and decide).
-3. Hit **Run the council**. Each hat gets its own full-screen card — a colored icon, its
-   point in one or two sentences, and its own spoken voice (pitch/tone vary per hat).
-   Swipe or tap the arrows to move between hats, or to go back and re-read/replay an
-   earlier one. Tap the mute button to turn off audio, or tap a hat's icon to hear it again.
+3. Hit **Run the council**. Each hat gets its own full-screen card — a colored icon and
+   its point in one or two sentences. Swipe or tap the arrows to move between hats, or
+   go back to re-read an earlier one.
 
 Sample material to try is in [`demo/`](demo/) — upload those `.md` files from the setup screen.
 
